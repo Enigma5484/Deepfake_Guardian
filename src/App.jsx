@@ -35,11 +35,20 @@ function App() {
       <nav className="app-nav glass-card">
         <div className="nav-content">
           <div className="brand-container" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
-            <div className="logo-box">
+            {/* <div className="logo-box">
               <ShieldAlert className="logo-icon" />
             </div>
             <div className="brand-text">
               <h1>Deepfake Guardian</h1>
+              <span className="mono-text subtitle">DIGITAL RIGHTS PROTECTION UNIT</span>
+            </div> */}
+            <img 
+              src="/logo.png" 
+              alt="Deepfake Guardian Logo" 
+              style={{ height: '50px', objectFit: 'contain' }} 
+            />
+            <div className="brand-text">
+              <h1 style={{ color: 'var(--primary)', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Deepfake Guardian</h1>
               <span className="mono-text subtitle">DIGITAL RIGHTS PROTECTION UNIT</span>
             </div>
           </div>

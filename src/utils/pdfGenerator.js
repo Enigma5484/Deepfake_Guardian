@@ -6,10 +6,12 @@ export const generateCaseFile = (data) => {
   const margin = 20;
   
   // Header
-  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(24);
   doc.setTextColor(220, 53, 69); // Red for urgency
-  doc.text('START // CYBER CRIME & DEEPFAKE REPORT', margin, 30);
+  doc.text('CYBER CRIME REPORT', margin, 30);
   
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text(`Case ID: ${data.id}`, margin, 40);
@@ -20,94 +22,220 @@ export const generateCaseFile = (data) => {
   doc.setDrawColor(200);
   doc.line(margin, 55, pageWidth - margin, 55);
 
+  // Initialize yPos at the start
+  let yPos = 70;
+
+  // Helper to check page break
+  const checkPageBreak = (heightToAdd) => {
+    if (yPos + heightToAdd > 280) {
+      doc.addPage();
+      yPos = 30; // Reset to top margin
+      return true;
+    }
+    return false;
+  };
+
   // Incident Details
+  checkPageBreak(60);
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.setTextColor(0);
-  doc.text('Incident Details', margin, 70);
+  doc.setTextColor(30, 58, 138); // Dark Blue for Section Headers
+  doc.text('Incident Details', margin, yPos);
+  yPos += 10;
   
-  doc.setFontSize(12);
-  doc.text(`Offender Username: ${data.offender}`, margin, 80);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(50); // Dark Gray for body
+  
+  doc.text(`Offender Username:`, margin, yPos);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${data.offender}`, margin + 45, yPos);
+  yPos += 8;
+
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Platform:`, margin, yPos);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${data.platform}`, margin + 45, yPos);
+  yPos += 8;
+
   if (data.offenderPhone) {
-    doc.text(`Offender Phone: ${data.countryCode} ${data.offenderPhone}`, margin, 90);
-    doc.text(`Platform: ${data.platform}`, margin, 100);
-  } else {
-    doc.text(`Platform: ${data.platform}`, margin, 90);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Offender Phone:`, margin, yPos);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${data.countryCode} ${data.offenderPhone}`, margin + 45, yPos);
+    yPos += 8;
   }
   
+  yPos += 5; // Extra spacing
+
   // Statement
   if (data.statement) {
-    doc.text('Victim Statement:', margin, 110);
+    checkPageBreak(40);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(30, 58, 138);
+    doc.text('Victim Statement:', margin, yPos);
+    yPos += 8;
+
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
+    doc.setTextColor(50);
+    
     const splitText = doc.splitTextToSize(data.statement, pageWidth - (margin * 2));
-    doc.text(splitText, margin, 120);
+    const textHeight = splitText.length * 5; // Approx height per line
+    checkPageBreak(textHeight);
+    
+    doc.text(splitText, margin, yPos);
+    yPos += textHeight + 10;
   }
 
-  // Evidence Images
-  let yPos = data.statement ? (data.offenderPhone ? 160 : 150) : (data.offenderPhone ? 120 : 110);
+  // AI Forensics Analysis Section
+  if (data.scanResults && data.scanResults.length > 0) {
+    // Estimate height of the whole section to see if it fits, else page break
+    const estimatedHeight = 20 + (data.scanResults.length * 15);
+    checkPageBreak(estimatedHeight);
+
+    // Section Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(30, 58, 138);
+    doc.text('AI Forensics Analysis', margin, yPos);
+    yPos += 8;
+
+    // Analysis Box Background
+    doc.setDrawColor(200);
+    doc.setFillColor(248, 250, 252);
+    const boxHeight = data.scanResults.length * 15 + 10;
+    
+    // Check if box fits, if not, we might need a sophisticated split or just push to new page
+    if (yPos + boxHeight > 280) {
+        doc.addPage();
+        yPos = 30;
+    }
+    
+    doc.rect(margin, yPos, pageWidth - (margin * 2), boxHeight, 'F');
+    yPos += 10; // Padding inside box
+
+    doc.setFontSize(10);
+    data.scanResults.forEach((res) => {
+      const resultText = res.error 
+        ? `Error: ${res.error}` 
+        : `${res.label.toUpperCase()} (${res.confidence.toFixed(1)}%)`;
+      
+      const color = res.isFake ? [220, 53, 69] : (res.error ? [100, 100, 100] : [25, 135, 84]);
+
+      // 1. File Name (Truncated)
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(50);
+      doc.text(`File:`, margin + 5, yPos);
+      
+      doc.setFont('helvetica', 'normal');
+      let fileName = res.fileName;
+      if (fileName.length > 25) fileName = fileName.substring(0, 22) + '...';
+      doc.text(`${fileName}`, margin + 20, yPos);
+      
+      // 2. Category (Centered-ish)
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(100);
+      doc.text(`[${res.category}]`, margin + 85, yPos);
+      
+      // 3. Result (Right Aligned)
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...color);
+      doc.text(resultText, pageWidth - margin - 5, yPos, { align: 'right' });
+      
+      yPos += 12; // Spacing
+    });
+    yPos += 10; 
+  }
   
+  // Evidence Images Handler
   const addEvidenceToDoc = (files, label) => {
     if (!files || files.length === 0) return;
     
-    // Check page break for section header
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 30;
-    }
+    checkPageBreak(40);
     
-    doc.setFontSize(12);
-    doc.setTextColor(0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(30, 58, 138);
     doc.text(label, margin, yPos);
-    yPos += 10;
+    yPos += 12;
     
     files.forEach((file, index) => {
-      // Check page break for each item
-      if (yPos > 220) {
-        doc.addPage();
-        yPos = 30;
-      }
+      // Fallback if type is missing but url exists
+      const isImage = file.type?.startsWith('image/') || file.url?.startsWith('data:image/');
 
-      if (file.type.startsWith('image/')) {
+      if (isImage) {
         try {
-          const imgData = file.url;
-          // Extract format from data URL
+          let imgData = file.url;
+          if (!imgData) throw new Error("Image data is empty");
+
+          if (!imgData.startsWith('data:image/')) {
+             throw new Error("Invalid image format");
+          }
+
           const format = imgData.match(/^data:image\/(\w+);base64,/)?.[1]?.toUpperCase() || 'JPEG';
           const validFormat = ['PNG', 'JPEG', 'JPG', 'WEBP'].includes(format) ? format : 'JPEG';
   
-          const imgProps = doc.getImageProperties(imgData);
-          const pdfWidth = 100;
+          let imgProps;
+          try {
+             imgProps = doc.getImageProperties(imgData);
+          } catch (propError) {
+             console.error("Failed to get image properties:", propError);
+             throw new Error("Corrupt image data");
+          }
+
+          const pdfWidth = 90; 
           const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
           
-          doc.addImage(imgData, validFormat, margin, yPos, pdfWidth, pdfHeight); 
-          doc.setFontSize(10);
+          let finalHeight = pdfHeight;
+          let finalWidth = pdfWidth;
+          if (finalHeight > 200) {
+             finalHeight = 200;
+             finalWidth = (imgProps.width * finalHeight) / imgProps.height;
+          }
+
+          checkPageBreak(finalHeight + 20);
+
+          doc.addImage(imgData, validFormat, margin, yPos, finalWidth, finalHeight); 
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
           doc.setTextColor(100);
-          doc.text(`Image ${index + 1}: ${file.name}`, margin, yPos + pdfHeight + 5);
-          yPos += pdfHeight + 15; 
+          doc.text(`Image ${index + 1}: ${file.name}`, margin, yPos + finalHeight + 5);
+          
+          yPos += finalHeight + 15; 
         } catch (e) {
           console.error("PDF Image Error:", e);
+          checkPageBreak(20);
           doc.setTextColor(220, 53, 69);
-          doc.text(`[Error loading image: ${file.name}]`, margin, yPos);
-          yPos += 10;
+          doc.setFont('helvetica', 'bold');
+          doc.text(`[Image Failed to Load: ${file.name} - ${e.message}]`, margin, yPos);
+          yPos += 15;
         }
-      } else if (file.type.startsWith('video/')) {
-        doc.setFontSize(10);
-        doc.setTextColor(100);
+      } else if (file.type?.startsWith('video/')) {
+        checkPageBreak(30);
         doc.setDrawColor(200);
         doc.setFillColor(245, 245, 245);
-        doc.rect(margin, yPos, 100, 20, 'FD');
+        doc.rect(margin, yPos, 90, 20, 'FD');
+        
         doc.setTextColor(0);
+        doc.setFontSize(10);
         doc.text(`[VIDEO EVIDENCE ATTACHED]`, margin + 5, yPos + 8);
-        doc.setFontSize(9);
+        
         doc.setTextColor(100);
+        doc.setFontSize(9);
         doc.text(`Filename: ${file.name}`, margin + 5, yPos + 14);
+        
         yPos += 30;
       }
     });
-    
-    yPos += 10; // Spacing after section
+    yPos += 10;
   };
 
   addEvidenceToDoc(data.screenshotImage, 'Evidence 1: Offender Message/Post');
-  addEvidenceToDoc(data.deepfakeImage, 'Evidence 2: Deepfake Content');
+  addEvidenceToDoc(data.originalImage, 'Evidence 2: Original Content');
+  addEvidenceToDoc(data.deepfakeImage, 'Evidence 3: Deepfake Content');
 
   // Footer
   const pageCount = doc.internal.getNumberOfPages();

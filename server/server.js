@@ -4,6 +4,10 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const trackRoutes = require('./routes/trackRoutes');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,6 +32,76 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/deepfake-gu
 
 // Routes
 app.use('/api/v1/tracker', resultLimiter, trackRoutes);
+
+// Configure Multer
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+
+const upload = multer({ storage: storage });
+
+// Analyze Endpoint
+app.post('/api/v1/analyze', upload.single('image'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, error: 'No image file uploaded' });
+    }
+
+    const scriptPath = path.join(__dirname, '../ml_service/predict.py');
+    const imagePath = req.file.path;
+
+    // Run Python Script
+    const pythonProcess = spawn('python', [scriptPath, imagePath]);
+
+    let dataString = '';
+    let errorString = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+        dataString += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+        errorString += data.toString();
+    });
+
+    pythonProcess.on('close', (code) => {
+        // Optional: Delete file after processing
+        // fs.unlinkSync(imagePath);
+
+        if (code !== 0) {
+            console.error('Python Script Error:', errorString);
+            return res.status(500).json({ success: false, error: 'Analysis execution failed' });
+        }
+
+        // Parse Output
+        // Expected: [Result] Class: ... \n [Confidence] ...%
+        const classMatch = dataString.match(/\[Result\] Class: (.+)/);
+        const confMatch = dataString.match(/\[Confidence\] (.+)%/);
+
+        if (classMatch && confMatch) {
+            res.json({
+                success: true,
+                result: {
+                    label: classMatch[1].trim(),
+                    confidence: parseFloat(confMatch[1]),
+                    isFake: classMatch[1].includes('Fake')
+                }
+            });
+        } else {
+            console.error('Parse Error, Output:', dataString);
+            res.status(500).json({ success: false, error: 'Failed to parse analysis results' });
+        }
+    });
+});
 
 // Root Route
 app.get('/', (req, res) => {

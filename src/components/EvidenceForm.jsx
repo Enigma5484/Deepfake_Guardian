@@ -102,6 +102,87 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
     incidentType: 'extortion' // 'extortion', 'fakes', or 'trace'
   });
 
+  const [scanResults, setScanResults] = useState([]);
+  const [isScanning, setIsScanning] = useState(false);
+
+  const handleScan = async () => {
+    const allImages = [
+        ...(formData.originalImage || []).map(img => ({ ...img, category: 'Original' })),
+        ...(formData.deepfakeImage || []).map(img => ({ ...img, category: 'Suspect' }))
+    ];
+
+    if (allImages.length === 0) {
+        alert("Please upload at least one image (Original or Fake) to scan.");
+        return;
+    }
+
+    setIsScanning(true);
+    
+    // Initialize results with loading state
+    const initialResults = allImages.map(img => ({
+        fileName: img.name,
+        category: img.category,
+        loading: true
+    }));
+    setScanResults(initialResults);
+
+    try {
+        const promises = allImages.map(async (fileObj, index) => {
+            const uploadData = new FormData();
+            uploadData.append('image', fileObj.file);
+
+            try {
+                const response = await fetch('/api/v1/analyze', {
+                    method: 'POST',
+                    body: uploadData
+                });
+                const data = await response.json();
+                
+                setScanResults(prev => {
+                    const newResults = [...prev];
+                    if (data.success) {
+                        newResults[index] = { 
+                            ...newResults[index], 
+                            ...data.result, 
+                            loading: false 
+                        };
+                    } else {
+                        newResults[index] = { 
+                            ...newResults[index], 
+                            error: data.error, 
+                            loading: false 
+                        };
+                    }
+                    return newResults;
+                });
+            } catch (err) {
+                 setScanResults(prev => {
+                    const newResults = [...prev];
+                    newResults[index] = { 
+                        ...newResults[index], 
+                        error: 'Connection Error', 
+                        loading: false 
+                    };
+                    return newResults;
+                });
+            }
+        });
+
+        await Promise.all(promises);
+
+    } catch (error) {
+        console.error(error);
+        alert("Error initiating scan sequence.");
+    } finally {
+        setIsScanning(false);
+    }
+  };
+
+  const handleReset = () => {
+    setScanResults([]);
+    setIsScanning(false);
+  };
+
   const countryCodes = [
     { code: '+91', country: 'IN' }, { code: '+1', country: 'US/CA' }, { code: '+44', country: 'UK' },
     { code: '+61', country: 'AU' }, { code: '+81', country: 'JP' }, { code: '+49', country: 'DE' },
@@ -127,28 +208,32 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
   const handleFileChange = (e, field) => {
     const files = Array.from(e.target.files);
     if (files.length > 0) {
-      const newFiles = [];
-      let processedCount = 0;
       
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          newFiles.push({
-            url: reader.result,
-            type: file.type,
-            name: file.name
-          });
-          processedCount++;
-          
-          if (processedCount === files.length) {
-            setFormData(prev => ({ 
+      const fileReaders = files.map(file => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+             resolve({
+                url: reader.result, // This is the base64 string
+                type: file.type,
+                name: file.name,
+                file: file
+             });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      });
+
+      Promise.all(fileReaders)
+        .then(newFiles => {
+           console.log(`[EvidenceForm Debug] Processed ${field}:`, newFiles);
+           setFormData(prev => ({ 
               ...prev, 
               [field]: [...(prev[field] || []), ...newFiles] 
-            }));
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+           }));
+        })
+        .catch(err => console.error("Error reading files:", err));
     }
   };
 
@@ -171,11 +256,13 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
     // Create a unique ID
     const caseId = 'CS-' + Math.random().toString(36).substr(2, 9).toUpperCase();
     
-    onSubmit({
+    const submissionData = {
       ...formData,
+      scanResults,
       id: caseId,
       timestamp: new Date().toISOString()
-    });
+    };
+    onSubmit(submissionData);
   };
 
   return (
@@ -257,7 +344,7 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
         {/* Upload Section */}
         <div className="upload-grid">
           <div className="form-group">
-            <label>Offender's Message/Post</label>
+            {!isFakesMode && <label>Offender's Message/Post</label>}
             <div className={`upload-box ${formData.screenshotImage?.length > 0 ? 'has-file' : ''}`}>
               <div className="upload-content" style={formData.screenshotImage?.length > 0 ? { pointerEvents: 'auto', zIndex: 20 } : {}}>
                 {formData.screenshotImage?.length > 0 ? (
@@ -310,7 +397,7 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
           </div>
 
           <div className="form-group">
-            <label>Evidence Comparison</label>
+            {!isFakesMode && <label>Evidence Comparison</label>}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {/* Original Content */}
               <div className={`upload-box ${formData.originalImage?.length > 0 ? 'has-file' : ''}`} style={{ height: '160px' }}>
@@ -415,7 +502,90 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
               </div>
             </div>
           </div>
-        </div>
+          </div>
+          
+          {/* AI Detection Section */}
+          <div style={{ marginTop: '20px', padding: '20px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Shield size={20} color="var(--primary)" />
+                    <h4 style={{ margin: 0 }}>AI Manipulation Detection</h4>
+                </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                <button
+                    type="button"
+                    onClick={handleScan}
+                    disabled={isScanning || (!formData.deepfakeImage?.length && !formData.originalImage?.length)}
+                    className="btn-secondary"
+                    style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                >
+                    {isScanning ? <RefreshCw className="spin" size={18} /> : <Scan size={18} />}
+                    {isScanning ? 'Analyzing Evidence...' : 'Scan All Evidence'}
+                </button>
+
+                {scanResults.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={handleReset}
+                        className="btn-danger-outline"
+                        style={{ padding: '0 16px', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid #EF4444', color: '#EF4444', background: 'transparent', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                        <RefreshCw size={16} />
+                        Reset
+                    </button>
+                )}
+            </div>
+
+            {/* Results List */}
+            {scanResults.length > 0 && (
+                <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {scanResults.map((res, idx) => (
+                        <div key={idx} style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.85rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>{res.fileName}</span>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{res.category}</span>
+                                </div>
+                                {res.loading ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+                                        <RefreshCw className="spin" size={14} />
+                                        <span>Analyzing...</span>
+                                    </div>
+                                ) : res.error ? (
+                                    <span style={{ color: '#EF4444' }}>Error</span>
+                                ) : (
+                                    <span style={{ 
+                                        color: res.isFake ? '#EF4444' : '#10B981',
+                                        fontWeight: 600,
+                                        alignSelf: 'center'
+                                    }}>
+                                        {res.label} ({res.confidence.toFixed(1)}%)
+                                    </span>
+                                )}
+                            </div>
+                            
+                            {!res.loading && !res.error && (
+                                <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                    <div style={{ 
+                                        height: '100%', 
+                                        width: `${res.confidence}%`, 
+                                        background: res.isFake ? '#EF4444' : '#10B981',
+                                        transition: 'width 1s ease-out'
+                                    }} />
+                                </div>
+                            )}
+                             {res.error && <div style={{ fontSize: '0.8rem', color: '#EF4444', marginTop: '4px' }}>{res.error}</div>}
+                        </div>
+                    ))}
+                    
+                    <p style={{ marginTop: '4px', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        Scan complete. Analysis based on artifact detection model.
+                    </p>
+                </div>
+            )}
+          </div>
 
         {/* Text Fields - Only show offender info if not in 'Only Fakes' mode */}
         <div className="fields-stack">
