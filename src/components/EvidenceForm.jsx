@@ -97,6 +97,7 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
     offenderPhone: '',
     statement: '',
     screenshotImage: [], // Array of files/URLs
+    originalImage: [],   // Array of files/URLs
     deepfakeImage: [],   // Array of files/URLs
     incidentType: 'extortion' // 'extortion', 'fakes', or 'trace'
   });
@@ -309,54 +310,108 @@ const EvidenceForm = ({ onSubmit, initialData }) => {
           </div>
 
           <div className="form-group">
-            <label>Deepfake Image</label>
-             <div className={`upload-box ${formData.deepfakeImage?.length > 0 ? 'has-file' : ''}`}>
-              <div className="upload-content" style={formData.deepfakeImage?.length > 0 ? { pointerEvents: 'auto', zIndex: 20 } : {}}>
-                {formData.deepfakeImage?.length > 0 ? (
-                  <div className="preview-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '10px', width: '100%', padding: '10px', maxHeight: '100%', overflowY: 'auto' }}>
-                    {formData.deepfakeImage.map((file, idx) => (
-                      <div key={idx} style={{ position: 'relative', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                        {file.type.startsWith('video') ? (
-                          <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <PlayCircle size={24} color="white" />
-                          </div>
-                        ) : (
-                          <img src={file.url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); removeFile('deepfakeImage', idx); }}
-                          style={{ position: 'absolute', top: 4, right: 4, padding: 4, background: 'rgba(0,0,0,0.6)', borderRadius: '50%', color: 'white', border: 'none', cursor: 'pointer', zIndex: 10, display: 'flex' }}
-                        >
-                          <X size={12} strokeWidth={3} />
-                        </button>
-                      </div>
-                    ))}
-                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.05)', borderRadius: '8px', aspectRatio: '1', cursor: 'pointer', border: '1px dashed var(--border-color)', transition: 'all 0.2s' }}>
+            <label>Evidence Comparison</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {/* Original Content */}
+              <div className={`upload-box ${formData.originalImage?.length > 0 ? 'has-file' : ''}`} style={{ height: '160px' }}>
+                 <div className="upload-content" style={formData.originalImage?.length > 0 ? { pointerEvents: 'auto', zIndex: 20 } : {}}>
+                  {formData.originalImage?.length > 0 ? (
+                    <div className="preview-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: '8px', width: '100%', padding: '8px', maxHeight: '100%', overflowY: 'auto' }}>
+                      {formData.originalImage.map((file, idx) => (
+                        <div key={idx} style={{ position: 'relative', aspectRatio: '1', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                          {file.type.startsWith('video') ? (
+                            <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <PlayCircle size={20} color="white" />
+                            </div>
+                          ) : (
+                            <img src={file.url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeFile('originalImage', idx); }}
+                            style={{ position: 'absolute', top: 2, right: 2, padding: 2, background: 'rgba(0,0,0,0.6)', borderRadius: '50%', color: 'white', border: 'none', cursor: 'pointer', zIndex: 10, display: 'flex' }}
+                          >
+                            <X size={10} strokeWidth={3} />
+                          </button>
+                        </div>
+                      ))}
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.05)', borderRadius: '6px', aspectRatio: '1', cursor: 'pointer', border: '1px dashed var(--border-color)', transition: 'all 0.2s' }}>
+                         <input 
+                          type="file" 
+                          multiple
+                          accept={isFakesMode ? "image/*,video/*" : "image/*"}
+                          onChange={(e) => handleFileChange(e, 'originalImage')}
+                          style={{ display: 'none' }}
+                        />
+                        <span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>+</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <>
+                       <input 
+                        type="file" 
+                        multiple
+                        accept={isFakesMode ? "image/*,video/*" : "image/*"}
+                        onChange={(e) => handleFileChange(e, 'originalImage')}
+                        className="file-input-hidden"
+                        style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                      />
+                      <Upload className="icon-upload" style={{ width: 24, height: 24 }} />
+                      <span style={{ fontSize: '0.85rem' }}>Upload Original</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Fake Content */}
+              <div className={`upload-box ${formData.deepfakeImage?.length > 0 ? 'has-file' : ''}`} style={{ height: '160px' }}>
+                <div className="upload-content" style={formData.deepfakeImage?.length > 0 ? { pointerEvents: 'auto', zIndex: 20 } : {}}>
+                  {formData.deepfakeImage?.length > 0 ? (
+                    <div className="preview-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: '8px', width: '100%', padding: '8px', maxHeight: '100%', overflowY: 'auto' }}>
+                      {formData.deepfakeImage.map((file, idx) => (
+                        <div key={idx} style={{ position: 'relative', aspectRatio: '1', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                          {file.type.startsWith('video') ? (
+                            <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <PlayCircle size={20} color="white" />
+                            </div>
+                          ) : (
+                            <img src={file.url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeFile('deepfakeImage', idx); }}
+                            style={{ position: 'absolute', top: 2, right: 2, padding: 2, background: 'rgba(0,0,0,0.6)', borderRadius: '50%', color: 'white', border: 'none', cursor: 'pointer', zIndex: 10, display: 'flex' }}
+                          >
+                            <X size={10} strokeWidth={3} />
+                          </button>
+                        </div>
+                      ))}
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.05)', borderRadius: '6px', aspectRatio: '1', cursor: 'pointer', border: '1px dashed var(--border-color)', transition: 'all 0.2s' }}>
+                         <input 
+                          type="file" 
+                          multiple
+                          accept={isFakesMode ? "image/*,video/*" : "image/*"}
+                          onChange={(e) => handleFileChange(e, 'deepfakeImage')}
+                          style={{ display: 'none' }}
+                        />
+                        <span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>+</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <>
                        <input 
                         type="file" 
                         multiple
                         accept={isFakesMode ? "image/*,video/*" : "image/*"}
                         onChange={(e) => handleFileChange(e, 'deepfakeImage')}
-                        style={{ display: 'none' }}
+                        className="file-input-hidden"
+                        style={{ cursor: 'pointer', pointerEvents: 'auto' }}
                       />
-                      <span style={{ fontSize: '24px', color: 'var(--text-muted)' }}>+</span>
-                    </label>
-                  </div>
-                ) : (
-                  <>
-                     <input 
-                      type="file" 
-                      multiple
-                      accept={isFakesMode ? "image/*,video/*" : "image/*"}
-                      onChange={(e) => handleFileChange(e, 'deepfakeImage')}
-                      className="file-input-hidden"
-                      style={{ cursor: 'pointer', pointerEvents: 'auto' }}
-                    />
-                    <Upload className="icon-upload" />
-                    <span>{isFakesMode ? "Upload Fake Content (Photo/Video)" : "Click to Upload Original/Fake"}</span>
-                  </>
-                )}
+                      <Upload className="icon-upload" style={{ width: 24, height: 24 }} />
+                      <span style={{ fontSize: '0.85rem' }}>Upload Fake</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

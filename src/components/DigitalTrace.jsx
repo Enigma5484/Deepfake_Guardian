@@ -351,7 +351,25 @@ const DigitalTrace = ({ mobileNumber }) => {
 
   useEffect(() => {
     if (isSelfTrace) return; // Don't run effect if self tracing
-    if (!mobileNumber) return;
+    
+    // Clear logs/results if empty
+    if (!mobileNumber) {
+      setLogs([]);
+      setResult(null);
+      setTraceStep(0);
+      return;
+    }
+
+    // Validation
+    const cleanNumber = mobileNumber.replace(/\D/g, '');
+    const isValid = cleanNumber.length >= 10;
+    
+    if (!isValid) {
+      setTraceStep(0);
+      setResult(null);
+      setLogs(['> ANALYZING INPUT...', '> ERROR: INVALID MSISDN FORMAT.', '> INPUT MUST BE A VALID MOBILE NUMBER.', '> TRACE ABORTED.']);
+      return;
+    }
 
     // Reset
     setTraceStep(1);
