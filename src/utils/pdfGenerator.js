@@ -27,7 +27,12 @@ export const generateCaseFile = (data) => {
   
   doc.setFontSize(12);
   doc.text(`Offender Username: ${data.offender}`, margin, 80);
-  doc.text(`Platform: ${data.platform}`, margin, 90);
+  if (data.offenderPhone) {
+    doc.text(`Offender Phone: ${data.countryCode} ${data.offenderPhone}`, margin, 90);
+    doc.text(`Platform: ${data.platform}`, margin, 100);
+  } else {
+    doc.text(`Platform: ${data.platform}`, margin, 90);
+  }
   
   // Statement
   if (data.statement) {
@@ -38,12 +43,12 @@ export const generateCaseFile = (data) => {
   }
 
   // Evidence Images
-  let yPos = data.statement ? 150 : 110;
+  let yPos = data.statement ? (data.offenderPhone ? 160 : 150) : (data.offenderPhone ? 120 : 110);
   
-  const addImageToDoc = (imgData, label) => {
-    if (!imgData) return;
+  const addEvidenceToDoc = (files, label) => {
+    if (!files || files.length === 0) return;
     
-    // Check if we need a new page
+    // Check page break for section header
     if (yPos > 250) {
       doc.addPage();
       yPos = 30;
@@ -54,31 +59,55 @@ export const generateCaseFile = (data) => {
     doc.text(label, margin, yPos);
     yPos += 10;
     
-    // Add image with auto-detected format
-    try {
-      // Extract format from data URL (e.g., "data:image/png;base64,...")
-      const format = imgData.match(/^data:image\/(\w+);base64,/)?.[1]?.toUpperCase() || 'JPEG';
-      // jsPDF supports 'PNG', 'JPEG', 'WEBP' (in some versions), 'BMP'. 
-      // Ensure specific formats are passed correctly.
-      const validFormat = ['PNG', 'JPEG', 'JPG', 'WEBP'].includes(format) ? format : 'JPEG';
+    files.forEach((file, index) => {
+      // Check page break for each item
+      if (yPos > 220) {
+        doc.addPage();
+        yPos = 30;
+      }
 
-      // Keep aspect ratio roughly (simplified: fit within 100x100 box)
-      const imgProps = doc.getImageProperties(imgData);
-      const pdfWidth = 100;
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      doc.addImage(imgData, validFormat, margin, yPos, pdfWidth, pdfHeight); 
-      yPos += pdfHeight + 10; 
-    } catch (e) {
-      console.error("PDF Image Error:", e);
-      doc.setTextColor(255, 0, 0);
-      doc.text('[Error loading image. Please ensure it is a valid JPG/PNG]', margin, yPos);
-      yPos += 10;
-    }
+      if (file.type.startsWith('image/')) {
+        try {
+          const imgData = file.url;
+          // Extract format from data URL
+          const format = imgData.match(/^data:image\/(\w+);base64,/)?.[1]?.toUpperCase() || 'JPEG';
+          const validFormat = ['PNG', 'JPEG', 'JPG', 'WEBP'].includes(format) ? format : 'JPEG';
+  
+          const imgProps = doc.getImageProperties(imgData);
+          const pdfWidth = 100;
+          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          
+          doc.addImage(imgData, validFormat, margin, yPos, pdfWidth, pdfHeight); 
+          doc.setFontSize(10);
+          doc.setTextColor(100);
+          doc.text(`Image ${index + 1}: ${file.name}`, margin, yPos + pdfHeight + 5);
+          yPos += pdfHeight + 15; 
+        } catch (e) {
+          console.error("PDF Image Error:", e);
+          doc.setTextColor(220, 53, 69);
+          doc.text(`[Error loading image: ${file.name}]`, margin, yPos);
+          yPos += 10;
+        }
+      } else if (file.type.startsWith('video/')) {
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.setDrawColor(200);
+        doc.setFillColor(245, 245, 245);
+        doc.rect(margin, yPos, 100, 20, 'FD');
+        doc.setTextColor(0);
+        doc.text(`[VIDEO EVIDENCE ATTACHED]`, margin + 5, yPos + 8);
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text(`Filename: ${file.name}`, margin + 5, yPos + 14);
+        yPos += 30;
+      }
+    });
+    
+    yPos += 10; // Spacing after section
   };
 
-  addImageToDoc(data.screenshotImage, 'Evidence 1: Offender Message/Post');
-  addImageToDoc(data.deepfakeImage, 'Evidence 2: Deepfake Image');
+  addEvidenceToDoc(data.screenshotImage, 'Evidence 1: Offender Message/Post');
+  addEvidenceToDoc(data.deepfakeImage, 'Evidence 2: Deepfake Content');
 
   // Footer
   const pageCount = doc.internal.getNumberOfPages();

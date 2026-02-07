@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
 import EvidenceForm from './components/EvidenceForm';
 import LegalOptions from './components/LegalOptions';
-// App.css is imported but we will use index.css for global styles mainly
+import ForensicResults from './components/ForensicResults';
 import './App.css';
 
 function App() {
   const [step, setStep] = useState(1);
   const [caseData, setCaseData] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const handlePopState = (event) => {
-      // If user presses back, go to step 1 (or whatever state dictates)
-      // Since we only have 2 steps, we default to step 1 on back
       setStep(1);
     };
 
@@ -23,16 +24,17 @@ function App() {
   const handleEvidenceSubmit = (data) => {
     setCaseData(data);
     setStep(2);
-    // Push a new entry so "Back" stays within the app
     window.history.pushState({ step: 2 }, '', '#action');
   };
+
+  const isVerifyPage = location.pathname === '/verify';
 
   return (
     <div className="app-container">
       {/* Navigation */}
       <nav className="app-nav glass-card">
         <div className="nav-content">
-          <div className="brand-container">
+          <div className="brand-container" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
             <div className="logo-box">
               <ShieldAlert className="logo-icon" />
             </div>
@@ -42,30 +44,39 @@ function App() {
             </div>
           </div>
           
-          <div className="steps-container mono-text">
-            <span className={`step ${step === 1 ? 'active' : ''}`}>01 // EVIDENCE</span>
-            <div className="step-divider"></div>
-            <span className={`step ${step === 2 ? 'active' : ''}`}>02 // ACTION</span>
-          </div>
+          {!isVerifyPage && (
+            <div className="steps-container mono-text">
+              <span className={`step ${step === 1 ? 'active' : ''}`}>01 // EVIDENCE</span>
+              <div className="step-divider"></div>
+              <span className={`step ${step === 2 ? 'active' : ''}`}>02 // ACTION</span>
+            </div>
+          )}
         </div>
       </nav>
 
       {/* Main Content */}
       <main className="main-content">
         <div className="animate-fade-in">
-          {step === 1 && (
-            <EvidenceForm onSubmit={handleEvidenceSubmit} initialData={caseData} />
-          )}
-          
-          {step === 2 && caseData && (
-            <LegalOptions caseData={caseData} onBack={() => setStep(1)} />
-          )}
+          <Routes>
+            <Route path="/" element={
+              <>
+                {step === 1 && (
+                  <EvidenceForm onSubmit={handleEvidenceSubmit} initialData={caseData} />
+                )}
+                
+                {step === 2 && caseData && (
+                  <LegalOptions caseData={caseData} onBack={() => setStep(1)} />
+                )}
+              </>
+            } />
+            <Route path="/verify" element={<ForensicResults />} />
+          </Routes>
         </div>
       </main>
 
       {/* Footer */}
       <footer className="app-footer glass-card mono-text">
-        THIS WEBSITE IS UNDER DEVELOPMENT
+        COPYRIGHT NOTICE
       </footer>
     </div>
   );
