@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, AlertTriangle, Download, ChevronRight, CheckCircle, ArrowLeft, ExternalLink, X, Loader, Globe, Search } from 'lucide-react';
+import { Shield, AlertTriangle, Download, ChevronRight, CheckCircle, ArrowLeft, ExternalLink, X, Loader, Globe, Search, Pause, Play } from 'lucide-react';
 import { generateCaseFile } from '../utils/pdfGenerator';
 
 const LegalOptions = ({ caseData, onBack }) => {
@@ -163,28 +163,11 @@ const LegalOptions = ({ caseData, onBack }) => {
     const [scanInitiated, setScanInitiated] = useState(false);
     const [scanResults, setScanResults] = useState({});
     const [stats, setStats] = useState({ total: 0, found: 0 });
+    const [isPaused, setIsPaused] = useState(false);
 
-    // Initial load
+    // Initial load - Start scan immediately
     React.useEffect(() => {
-        fetch('/api/v1/websites')
-            .then(res => {
-                if (!res.ok) throw new Error("Failed to connect to server");
-                return res.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    setWebsites(data.websites);
-                    setLoading(false);
-                    initiateScan();
-                } else {
-                    throw new Error(data.error || "Failed to load website list");
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                setError(err.message);
-                setLoading(false);
-            });
+        initiateScan();
     }, []);
 
     // Helper to normalize URLs for matching
@@ -195,41 +178,78 @@ const LegalOptions = ({ caseData, onBack }) => {
 
     // Polling for results
     React.useEffect(() => {
-        if (loading || error) return;
+        if (error || isPaused) return;
         
         const pollInterval = setInterval(() => {
             fetch('/api/v1/scan-results')
                 .then(res => res.json())
                 .then(data => {
-                    if (data.success && data.all_results) {
-                        const resultsMap = {};
-                        data.all_results.forEach(r => {
-                            // Normalize Key from result
-                            const key = normalizeUrl(r.source_url);
-                            if (!resultsMap[key] || r.prediction === 'Fake') {
-                                resultsMap[key] = r;
-                            }
-                        });
-                        setScanResults(resultsMap);
-                        setStats({
-                            total: data.summary?.total_scanned || 0,
-                            found: data.summary?.deepfakes_found || 0
-                        });
+                    if (data.success) {
+                        // Sync website list with backend target
+                        if (data.target_urls && data.target_urls.length > 0) {
+                             if (JSON.stringify(websites) !== JSON.stringify(data.target_urls)) {
+                                 setWebsites(data.target_urls);
+                                 setLoading(false);
+                             }
+                        }
+
+                        if (data.all_results) {
+                            const resultsMap = {};
+                            data.all_results.forEach(r => {
+                                // Normalize Key from result
+                                const key = normalizeUrl(r.source_url);
+                                if (!resultsMap[key] || r.prediction === 'Fake') {
+                                    resultsMap[key] = r;
+                                }
+                            });
+                            setScanResults(resultsMap);
+                            setStats({
+                                total: data.summary?.total_scanned || 0,
+                                found: data.summary?.deepfakes_found || 0
+                            });
+                        }
                     }
                 })
-                .catch(console.error);
-        }, 2000); 
+                .catch(err => {
+                    console.error("Polling error:", err);
+                    // Don't set error state here to avoid blocking UI on transient failures
+                });
+        }, 1000); // Faster polling for better responsiveness
 
         return () => clearInterval(pollInterval);
-    }, [loading, error]);
+    }, [websites, error, isPaused]);
 
     const initiateScan = async () => {
-        if (scanInitiated) return;
+        // Always allow re-initiation if needed, but managing state
         setScanInitiated(true);
+        setLoading(true);
+        setWebsites([]); // Clear previous list
+        setScanResults({});
+        setStats({ total: 0, found: 0 });
+        
         try {
             await fetch('/api/v1/global-scan', { method: 'POST' });
         } catch (e) {
             console.error("Scan trigger failed", e);
+            setError("Failed to initiate scan");
+            setLoading(false);
+        }
+    };
+
+    const togglePause = async () => {
+        const action = isPaused ? 'resume' : 'pause';
+        try {
+            const res = await fetch('/api/v1/scan-control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setIsPaused(!isPaused);
+            }
+        } catch (e) {
+            console.error("Pause/Resume failed", e);
         }
     };
 
@@ -245,64 +265,82 @@ const LegalOptions = ({ caseData, onBack }) => {
             <div className="glass-card" style={{ 
                 width: '90%', maxWidth: '600px', maxHeight: '80vh', 
                 display: 'flex', flexDirection: 'column', position: 'relative', 
-                overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                overflow: 'hidden', 
+                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                background: 'rgba(255, 255, 255, 0.95)', // Enhanced White
+                color: '#1f2937' // Darker text for white background
             }}>
-                <button 
-                    onClick={() => setShowScanOverlay(false)}
-                    style={{ position: 'absolute', top: 15, right: 15, background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', cursor: 'pointer', zIndex: 10, padding: '6px', borderRadius: '50%' }}
-                >
-                    <X size={18} />
-                </button>
+                <div style={{ position: 'absolute', top: 15, right: 15, zIndex: 10, display: 'flex', gap: '8px' }}>
+                     <button 
+                        onClick={togglePause}
+                        style={{ 
+                            background: isPaused ? '#10B981' : '#F59E0B', 
+                            border: 'none', color: 'white', cursor: 'pointer', 
+                            padding: '8px 16px', borderRadius: '20px',
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            fontWeight: '600', fontSize: '0.85rem',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                        }}
+                    >
+                        {isPaused ? <><Play size={14} /> Resume</> : <><Pause size={14} /> Pause</>}
+                    </button>
+                    <button 
+                        onClick={() => setShowScanOverlay(false)}
+                        style={{ background: 'rgba(0,0,0,0.1)', border: 'none', color: '#4b5563', cursor: 'pointer', padding: '6px', borderRadius: '50%' }}
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
 
-                <div style={{ padding: '32px', borderBottom: '1px solid var(--border-color)', background: 'linear-gradient(to bottom, rgba(59, 130, 246, 0.1), transparent)' }}>
+                <div style={{ padding: '60px 32px 32px 32px', borderBottom: '1px solid rgba(0,0,0,0.1)', background: 'linear-gradient(to bottom, rgba(59, 130, 246, 0.05), transparent)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <div style={{ padding: '12px', background: 'rgba(59, 130, 246, 0.2)', borderRadius: '12px' }}>
-                                <Globe size={32} color="#60A5FA" />
+                            <div style={{ padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px' }}>
+                                <Globe size={32} color="#2563EB" />
                             </div>
                             <div>
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', letterSpacing: '-0.5px' }}>Global Deepfake Scan</h2>
-                                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                    Active Real-time Monitoring
+                                <h2 style={{ margin: 0, fontSize: '1.5rem', letterSpacing: '-0.5px', color: '#111827' }}>Global Deepfake Scan</h2>
+                                <p style={{ margin: '4px 0 0', color: '#4B5563', fontSize: '0.9rem' }}>
+                                    {isPaused ? 'Scan Paused' : 'Active Real-time Monitoring'}
                                 </p>
                             </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                             <div style={{ fontSize: '2rem', fontWeight: 700, color: stats.found > 0 ? '#F87171' : '#34D399' }}>
+                             <div style={{ fontSize: '2rem', fontWeight: 700, color: stats.found > 0 ? '#EF4444' : '#10B981' }}>
                                 {stats.found}
                              </div>
-                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                             <div style={{ fontSize: '0.8rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '1px' }}>
                                 Deepfakes Detected
                              </div>
                         </div>
                     </div>
 
                     {/* Progress Bar */}
-                    <div style={{ background: 'rgba(255,255,255,0.05)', height: '6px', borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
+                    <div style={{ background: 'rgba(0,0,0,0.1)', height: '6px', borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
                         <div style={{ 
                             width: `${progressPercentage}%`, 
-                            background: stats.found > 0 ? '#F87171' : '#3B82F6', 
+                            background: stats.found > 0 ? '#EF4444' : '#2563EB', 
                             height: '100%', 
                             transition: 'width 0.5s ease-out' 
                         }} />
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.8rem', color: '#6B7280' }}>
                         <span>Scanning: {stats.total} / {websites.length} websites</span>
                         <span>{Math.round(progressPercentage)}% Complete</span>
                     </div>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#F9FAFB' }}>
                     {loading ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px', color: 'var(--text-muted)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px', color: '#6B7280' }}>
                             <Loader className="spin" size={32} />
                             <p>Connecting to secure server...</p>
                         </div>
                     ) : error ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px', color: '#F87171' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px', color: '#EF4444' }}>
                             <AlertTriangle size={48} />
-                            <p style={{ textAlign: 'center' }}>{error}<br/><span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Please ensure the backend server is running.</span></p>
+                            <p style={{ textAlign: 'center' }}>{error}<br/><span style={{ fontSize: '0.8rem', color: '#6B7280' }}>Please ensure the backend server is running.</span></p>
                             <button onClick={() => window.location.reload()} className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>Retry Connection</button>
                         </div>
                     ) : (
@@ -317,19 +355,20 @@ const LegalOptions = ({ caseData, onBack }) => {
                                     <div key={idx} style={{ 
                                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                         padding: '16px', 
-                                        background: isFake ? 'rgba(220, 38, 38, 0.1)' : 'rgba(255,255,255,0.02)', 
+                                        background: isFake ? '#FEF2F2' : 'white', 
                                         borderRadius: '12px', 
-                                        border: isFake ? '1px solid rgba(220, 38, 38, 0.3)' : '1px solid rgba(255,255,255,0.05)',
-                                        transition: 'all 0.2s'
+                                        border: isFake ? '1px solid #FECACA' : '1px solid #E5E7EB',
+                                        transition: 'all 0.2s',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', overflow: 'hidden' }}>
                                             <div style={{ 
                                                 width: '32px', height: '32px', borderRadius: '8px', 
-                                                background: isFake ? 'rgba(220, 38, 38, 0.2)' : (isSafe ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)'),
+                                                background: isFake ? '#FEE2E2' : (isSafe ? '#D1FAE5' : '#F3F4F6'),
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center'
                                             }}>
                                                 {result ? (
-                                                    isFake ? <AlertTriangle size={16} color="#F87171" /> : <CheckCircle size={16} color="#34D399" />
+                                                    isFake ? <AlertTriangle size={16} color="#EF4444" /> : <CheckCircle size={16} color="#10B981" />
                                                 ) : (
                                                     <div style={{ 
                                                         width: '8px', height: '8px', borderRadius: '50%', 
@@ -337,7 +376,7 @@ const LegalOptions = ({ caseData, onBack }) => {
                                                     }} className="pulse" />
                                                 )}
                                             </div>
-                                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{site}</span>
+                                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{site}</span>
                                         </div>
                                         
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
@@ -345,17 +384,17 @@ const LegalOptions = ({ caseData, onBack }) => {
                                                 <div style={{ textAlign: 'right' }}>
                                                     <div style={{ 
                                                         fontSize: '0.85rem', 
-                                                        color: isFake ? '#F87171' : '#34D399',
+                                                        color: isFake ? '#EF4444' : '#10B981',
                                                         fontWeight: 700, letterSpacing: '0.5px'
                                                     }}>
                                                         {isFake ? 'THREAT DETECTED' : 'SAFE'}
                                                     </div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
                                                         {result.confidence}% Confidence
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '20px' }}>
+                                                <span style={{ fontSize: '0.8rem', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '6px', background: '#F3F4F6', padding: '4px 10px', borderRadius: '20px' }}>
                                                     <Search size={12} /> Scanning...
                                                 </span>
                                             )}
@@ -367,7 +406,7 @@ const LegalOptions = ({ caseData, onBack }) => {
                     )}
                 </div>
 
-                <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                <div style={{ padding: '16px', borderTop: '1px solid rgba(0,0,0,0.1)', background: '#F3F4F6', fontSize: '0.85rem', color: '#6B7280', textAlign: 'center' }}>
                     <p style={{ margin: 0 }}>Scan running in secure background environment. This window can be minimized.</p>
                 </div>
             </div>
@@ -429,5 +468,5 @@ const LegalOptions = ({ caseData, onBack }) => {
     </div>
   );
 };
-
 export default LegalOptions;
+

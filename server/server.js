@@ -103,23 +103,99 @@ app.post('/api/v1/analyze', upload.single('image'), (req, res) => {
     });
 });
 
+
+// Keep track of the scanning process
+let scanProcess = null;
+
 // Global Scan Endpoint
 app.post('/api/v1/global-scan', (req, res) => {
     const scriptPath = path.join(__dirname, '../ml_service/deepfake_scanner.py');
+    const pauseFlagPath = path.join(__dirname, '../ml_service/scan_paused.flag');
+    
+    // Kill existing process if running
+    if (scanProcess) {
+        try {
+            console.log('[Global Scan] Stopping previous scan process...');
+            scanProcess.kill();
+            scanProcess = null;
+        } catch (e) {
+            console.error("Failed to kill previous process:", e);
+        }
+    }
+
+    // Clear pause flag if exists
+    if (fs.existsSync(pauseFlagPath)) {
+        try {
+            fs.unlinkSync(pauseFlagPath);
+        } catch (e) {
+            console.error("Failed to clear pause flag:", e);
+        }
+    }
+
+    // Clear previous results to reset count
+    const resultsPath = path.join(__dirname, '../ml_service/scan_results.json');
+    if (fs.existsSync(resultsPath)) {
+        try {
+            fs.unlinkSync(resultsPath);
+        } catch (e) {
+            console.error("Failed to clear previous results:", e);
+        }
+    }
+
     console.log(`[Global Scan] Initiating scan using ${scriptPath}`);
 
-    // Run Python Script in detached mode or just don't wait for it
-    const pythonProcess = spawn('python', [scriptPath], {
-        detached: true,
-        stdio: 'ignore'
-    });
+    // Run Python Script in detached mode
+    // We keep a reference to it now, so we can kill it later.
+    // Note: 'detached: true' might make it harder to kill if we lose the reference, 
+    // but here we maintain the reference `scanProcess`.
+    // However, if we restart the server, we lose the reference (OS manages that).
+    // For now, this solves the "click proceed twice" issue within one server session.
+    const pythonProcess = spawn('python', [scriptPath]);
     
-    pythonProcess.unref();
+    scanProcess = pythonProcess;
+
+    pythonProcess.stdout.on('data', (data) => {
+        // console.log(`[Scanner]: ${data}`); // Optional logging
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+        console.error(`[Scanner Error]: ${data}`);
+    });
+
+    pythonProcess.on('close', (code) => {
+        console.log(`[Scanner] Process exited with code ${code}`);
+        if (scanProcess === pythonProcess) {
+            scanProcess = null;
+        }
+    });
 
     res.json({ 
         success: true, 
-        message: 'Global deepfake scan initiated in background.' 
+        message: 'Global deepfake scan initiated.' 
     });
+});
+
+// Scan Control Endpoint (Pause/Resume)
+app.post('/api/v1/scan-control', (req, res) => {
+    const { action } = req.body;
+    const pauseFlagPath = path.join(__dirname, '../ml_service/scan_paused.flag');
+
+    try {
+        if (action === 'pause') {
+            fs.closeSync(fs.openSync(pauseFlagPath, 'w'));
+            res.json({ success: true, message: 'Scan paused' });
+        } else if (action === 'resume') {
+            if (fs.existsSync(pauseFlagPath)) {
+                fs.unlinkSync(pauseFlagPath);
+            }
+            res.json({ success: true, message: 'Scan resumed' });
+        } else {
+            res.status(400).json({ success: false, error: 'Invalid action' });
+        }
+    } catch (error) {
+        console.error("Control error:", error);
+        res.status(500).json({ success: false, error: 'Failed to execute control action' });
+    }
 });
 
 // Get Websites List Endpoint

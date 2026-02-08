@@ -6,19 +6,34 @@ import numpy as np
 import os
 import json
 import time
+import random
 
 # --- Configuration ---
 # Path to the trained model
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEBSITES_FILE = os.path.join(BASE_DIR, '..', 'websites.txt')
+PAUSE_FLAG = os.path.join(BASE_DIR, 'scan_paused.flag')
+TEMP_DIR = os.path.join(BASE_DIR, 'temp_images')
+
+# Ensure temp directory exists
+if not os.path.exists(TEMP_DIR):
+    os.makedirs(TEMP_DIR)
 
 # Load websites from file
 TARGET_URLS = []
 if os.path.exists(WEBSITES_FILE):
     try:
         with open(WEBSITES_FILE, 'r') as f:
-            TARGET_URLS = [line.strip() for line in f if line.strip()]
-        print(f"Loaded {len(TARGET_URLS)} websites from {WEBSITES_FILE}")
+            all_urls = [line.strip() for line in f if line.strip()]
+        
+        # Limit to 300 random websites
+        if len(all_urls) > 300:
+            TARGET_URLS = random.sample(all_urls, 300)
+            print(f"Loaded {len(all_urls)} websites, randomly selected 300 for this scan.")
+        else:
+            TARGET_URLS = all_urls
+            print(f"Loaded {len(TARGET_URLS)} websites from {WEBSITES_FILE}")
+
     except Exception as e:
         print(f"Error reading websites.txt: {e}")
 else:
@@ -47,8 +62,10 @@ def download_image(url):
     try:
         response = requests.get(url, stream=True, timeout=5)
         if response.status_code == 200:
-            # Create a localized temporary file
-            temp_filename = os.path.join(BASE_DIR, f"temp_{int(time.time())}_{np.random.randint(1000)}.jpg")
+            # Create a localized temporary file in temp directory
+            if not os.path.exists(TEMP_DIR):
+                os.makedirs(TEMP_DIR)
+            temp_filename = os.path.join(TEMP_DIR, f"temp_{int(time.time())}_{np.random.randint(1000)}.jpg")
             with open(temp_filename, 'wb') as f:
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
@@ -82,15 +99,49 @@ def predict_image(model, img_path):
         return None, 0
 
 def scan_websites():
+    # Clear pause flag on start
+    if os.path.exists(PAUSE_FLAG):
+        try:
+            os.remove(PAUSE_FLAG)
+        except:
+            pass
+
+    # Clean up any existing temp images from previous runs
+    if os.path.exists(TEMP_DIR):
+        try:
+            for f in os.listdir(TEMP_DIR):
+                os.remove(os.path.join(TEMP_DIR, f))
+        except Exception as e:
+            print(f"Warning: Could not clean temp directory: {e}")
+
     model = load_model()
     if not model:
         return
 
     results = []
     
+    # Save target URLs immediately so frontend knows what to track
+    try:
+        with open(OUTPUT_FILE, 'w') as f:
+             json.dump({
+                "summary": {
+                    "total_scanned": 0,
+                    "deepfakes_found": 0,
+                },
+                "all_results": [],
+                "target_urls": TARGET_URLS
+            }, f, indent=4)
+    except Exception as e:
+        print(f"Error saving initial state: {e}")
+    
     print(f"Starting scan of {len(TARGET_URLS)} websites...")
 
     for url in TARGET_URLS:
+        # Check for pause
+        while os.path.exists(PAUSE_FLAG):
+            print("Scan paused... waiting for resume.")
+            time.sleep(2)
+
         print(f"\nScanning: {url}")
         try:
             response = requests.get(url, timeout=10)
@@ -101,6 +152,10 @@ def scan_websites():
             print(f"Found {len(img_tags)} images.")
 
             for img in img_tags:
+                # Check for pause inside image loop as well for faster response
+                while os.path.exists(PAUSE_FLAG):
+                    time.sleep(1)
+
                 src = img.get('src')
                 if not src:
                     continue
@@ -169,7 +224,8 @@ def scan_websites():
                     "total_scanned": len(results),
                     "deepfakes_found": len([r for r in results if r['prediction'] == 'Fake']),
                 },
-                "all_results": results
+                "all_results": results,
+                "target_urls": TARGET_URLS
             }, f, indent=4)
 
     # Separate lists for the model as requested
@@ -189,7 +245,8 @@ def scan_websites():
                 "real_found": len(real_images)
             },
             "deepfakes": fake_images,
-            "all_results": results
+            "all_results": results,
+            "target_urls": TARGET_URLS
         }, f, indent=4)
         
     print(f"Results saved to {OUTPUT_FILE}")
