@@ -1,6 +1,6 @@
 {
     "summary": {
-        "total_scanned": 106,
+        "total_scanned": 123,
         "deepfakes_found": 4
     },
     "all_results": [
@@ -745,6 +745,125 @@
             "prediction": "Real",
             "confidence": 86.86,
             "timestamp": "2026-02-08 09:23:45"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://imagebam.com/images/imagebam_light.png",
+            "prediction": "Real",
+            "confidence": 94.67,
+            "timestamp": "2026-02-08 09:23:57"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/addfiles.png",
+            "prediction": "Real",
+            "confidence": 94.99,
+            "timestamp": "2026-02-08 09:24:06"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/free.png",
+            "prediction": "Real",
+            "confidence": 99.87,
+            "timestamp": "2026-02-08 09:24:08"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/infinity.png",
+            "prediction": "Real",
+            "confidence": 99.91,
+            "timestamp": "2026-02-08 09:24:10"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/flash.png",
+            "prediction": "Real",
+            "confidence": 99.97,
+            "timestamp": "2026-02-08 09:24:12"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/lock.png",
+            "prediction": "Real",
+            "confidence": 99.86,
+            "timestamp": "2026-02-08 09:24:13"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/security.png",
+            "prediction": "Real",
+            "confidence": 99.81,
+            "timestamp": "2026-02-08 09:24:15"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/cube.png",
+            "prediction": "Real",
+            "confidence": 99.99,
+            "timestamp": "2026-02-08 09:24:17"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/earth.png",
+            "prediction": "Real",
+            "confidence": 99.97,
+            "timestamp": "2026-02-08 09:24:19"
+        },
+        {
+            "source_url": "https://imagebam.com",
+            "image_url": "https://www.imagebam.com/images/icons/plus.png",
+            "prediction": "Real",
+            "confidence": 100.0,
+            "timestamp": "2026-02-08 09:24:21"
+        },
+        {
+            "source_url": "https://imagevenue.com",
+            "image_url": "https://imagevenue.com/images/logo_light.png",
+            "prediction": "Real",
+            "confidence": 92.16,
+            "timestamp": "2026-02-08 09:24:28"
+        },
+        {
+            "source_url": "https://imagevenue.com",
+            "image_url": "https://www.imagevenue.com/icons/lock_light.png",
+            "prediction": "Real",
+            "confidence": 100.0,
+            "timestamp": "2026-02-08 09:24:36"
+        },
+        {
+            "source_url": "https://imagevenue.com",
+            "image_url": "https://www.imagevenue.com/icons/network_light.png",
+            "prediction": "Real",
+            "confidence": 99.31,
+            "timestamp": "2026-02-08 09:24:37"
+        },
+        {
+            "source_url": "https://imagevenue.com",
+            "image_url": "https://www.imagevenue.com/icons/world_light.png",
+            "prediction": "Real",
+            "confidence": 98.88,
+            "timestamp": "2026-02-08 09:24:39"
+        },
+        {
+            "source_url": "https://imagevenue.com",
+            "image_url": "https://www.imagevenue.com/icons/spy_light.png",
+            "prediction": "Real",
+            "confidence": 99.97,
+            "timestamp": "2026-02-08 09:24:40"
+        },
+        {
+            "source_url": "https://imagevenue.com",
+            "image_url": "https://www.imagevenue.com/images/vision_board.png",
+            "prediction": "Real",
+            "confidence": 99.62,
+            "timestamp": "2026-02-08 09:24:43"
+        },
+        {
+            "source_url": "https://imagevenue.com",
+            "image_url": "https://www.imagevenue.com/images/events.png",
+            "prediction": "Real",
+            "confidence": 95.21,
+            "timestamp": "2026-02-08 09:24:45"
         }
     ]
 }
